@@ -305,11 +305,18 @@ func (s *Service) CreateNodeDryRun(workflowID string, input parser.NodeInput, co
 	return node, nil
 }
 
-func (s *Service) UpdateNode(workflowID, nodeRef string, patches []parser.NodePatch, unsets []string, mergeFile, replaceFile, patchFile string, rename string, moveX, moveY *float64, enable, disable bool, dryRun bool) (*parser.ParsedNode, error) {
+func (s *Service) UpdateNode(workflowID, nodeRef string, patches []parser.NodePatch, unsets []string, mergeFile, replaceFile, patchFile string, rename string, moveX, moveY *float64, enable, disable bool, dryRun bool) (*parser.UpdateResult, error) {
 	pw, err := s.fetchAndParse(workflowID)
 	if err != nil {
 		return nil, err
 	}
+
+	// Snapshot before state for diff
+	targetNode, err := parser.ResolveRef(pw, nodeRef)
+	if err != nil {
+		return nil, err
+	}
+	beforeSnapshot := parser.SnapshotNode(targetNode)
 
 	var node *parser.ParsedNode
 
@@ -402,6 +409,10 @@ func (s *Service) UpdateNode(workflowID, nodeRef string, patches []parser.NodePa
 		}
 	}
 
+	// Compute diff
+	afterSnapshot := parser.SnapshotNode(node)
+	changedPaths := parser.DetectChanges(beforeSnapshot, afterSnapshot)
+
 	if !dryRun {
 		_, err = s.saveWorkflow(pw)
 		if err != nil {
@@ -409,7 +420,10 @@ func (s *Service) UpdateNode(workflowID, nodeRef string, patches []parser.NodePa
 		}
 	}
 
-	return node, nil
+	return &parser.UpdateResult{
+		Node:         node,
+		ChangedPaths: changedPaths,
+	}, nil
 }
 
 func (s *Service) DeleteNode(workflowID, nodeRef string, opts parser.DeleteOptions, dryRun bool) error {

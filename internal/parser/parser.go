@@ -65,6 +65,8 @@ func extractMeta(raw map[string]interface{}) WorkflowMeta {
 }
 
 func parseNode(m map[string]interface{}, index int) *ParsedNode {
+	rawCopy, _ := DeepCopyRaw(m)
+
 	node := &ParsedNode{
 		Ref:      fmt.Sprintf("n%d", index),
 		ID:       stringField(m, "id"),
@@ -72,6 +74,7 @@ func parseNode(m map[string]interface{}, index int) *ParsedNode {
 		Type:     stringField(m, "type"),
 		Disabled: boolField(m, "disabled"),
 		Notes:    stringField(m, "notes"),
+		RawJSON:  rawCopy,
 	}
 
 	if tv, ok := m["typeVersion"]; ok {
@@ -375,6 +378,107 @@ func DeepCopyRaw(raw map[string]interface{}) (map[string]interface{}, error) {
 		return nil, err
 	}
 	return copy, nil
+}
+
+// NodeToNativeJSON converts a ParsedNode back to the native n8n node JSON format.
+// This is the authoritative representation used for --view json and copy-paste safety.
+func NodeToNativeJSON(n *ParsedNode) map[string]interface{} {
+	return rehydrateNode(n)
+}
+
+// SnapshotNode takes a deep copy of a node's current state for diff comparison.
+// The returned map is fully isolated from the original node — safe to mutate.
+func SnapshotNode(n *ParsedNode) map[string]interface{} {
+	shallow := rehydrateNode(n)
+	deep, err := DeepCopyRaw(shallow)
+	if err != nil {
+		// Fallback: return the shallow copy if deep copy fails (should never happen)
+		return shallow
+	}
+	return deep
+}
+
+// ExtractPath extracts a value from the native node JSON using a dot-separated path.
+// Paths are relative to the node root: "parameters.email", "credentials.hubspotApi.id", "name".
+func ExtractPath(n *ParsedNode, path string) (interface{}, error) {
+	native := NodeToNativeJSON(n)
+	return extractFromMap(native, path)
+}
+
+func extractFromMap(m map[string]interface{}, path string) (interface{}, error) {
+	parts := strings.Split(path, ".")
+	var current interface{} = m
+
+	for i, part := range parts {
+		switch c := current.(type) {
+		case map[string]interface{}:
+			val, ok := c[part]
+			if !ok {
+				fullPath := strings.Join(parts[:i+1], ".")
+				return nil, fmt.Errorf("path %q not found", fullPath)
+			}
+			current = val
+		default:
+			fullPath := strings.Join(parts[:i], ".")
+			return nil, fmt.Errorf("path %q is not an object (cannot traverse further)", fullPath)
+		}
+	}
+	return current, nil
+}
+
+// DetectChanges compares before and after node snapshots and returns dot-paths that differ.
+func DetectChanges(before, after map[string]interface{}) []string {
+	var changes []string
+	diffMaps("", before, after, &changes)
+	return changes
+}
+
+func diffMaps(prefix string, before, after map[string]interface{}, changes *[]string) {
+	allKeys := make(map[string]bool)
+	for k := range before {
+		allKeys[k] = true
+	}
+	for k := range after {
+		allKeys[k] = true
+	}
+
+	for k := range allKeys {
+		path := k
+		if prefix != "" {
+			path = prefix + "." + k
+		}
+
+		bVal, bOk := before[k]
+		aVal, aOk := after[k]
+
+		if !bOk {
+			*changes = append(*changes, path+" (added)")
+			continue
+		}
+		if !aOk {
+			*changes = append(*changes, path+" (removed)")
+			continue
+		}
+
+		bMap, bIsMap := bVal.(map[string]interface{})
+		aMap, aIsMap := aVal.(map[string]interface{})
+
+		if bIsMap && aIsMap {
+			diffMaps(path, bMap, aMap, changes)
+			continue
+		}
+
+		bJSON, _ := json.Marshal(bVal)
+		aJSON, _ := json.Marshal(aVal)
+		if string(bJSON) != string(aJSON) {
+			*changes = append(*changes, path)
+		}
+	}
+}
+
+// SyncRawJSON updates the stored RawJSON on a ParsedNode to reflect current field values.
+func SyncRawJSON(n *ParsedNode) {
+	n.RawJSON = rehydrateNode(n)
 }
 
 // --- helpers ---

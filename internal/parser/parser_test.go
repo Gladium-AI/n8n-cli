@@ -124,12 +124,26 @@ func TestParseEdges(t *testing.T) {
 		t.Fatalf("expected 2 edges, got %d", len(pw.Edges))
 	}
 
-	e0 := pw.Edges[0]
-	if e0.FromName != "Start" || e0.ToName != "HTTP Request" {
-		t.Errorf("expected Start->HTTP Request, got %s->%s", e0.FromName, e0.ToName)
+	// Don't rely on iteration order — look for both edges by content
+	edgeSet := make(map[string]bool)
+	for _, e := range pw.Edges {
+		edgeSet[e.FromName+"->"+e.ToName] = true
 	}
-	if e0.FromRef != "n0" || e0.ToRef != "n1" {
-		t.Errorf("expected n0->n1, got %s->%s", e0.FromRef, e0.ToRef)
+
+	if !edgeSet["Start->HTTP Request"] {
+		t.Error("expected edge Start->HTTP Request")
+	}
+	if !edgeSet["HTTP Request->Set Data"] {
+		t.Error("expected edge HTTP Request->Set Data")
+	}
+
+	// Verify refs are correct by looking up each edge
+	for _, e := range pw.Edges {
+		if e.FromName == "Start" && e.ToName == "HTTP Request" {
+			if e.FromRef != "n0" || e.ToRef != "n1" {
+				t.Errorf("Start->HTTP Request: expected n0->n1, got %s->%s", e.FromRef, e.ToRef)
+			}
+		}
 	}
 }
 
@@ -469,6 +483,268 @@ func TestGraphAnalysis(t *testing.T) {
 	}
 	if len(analysis.TopologicalOrder) != 3 {
 		t.Errorf("expected topological order length=3, got %d", len(analysis.TopologicalOrder))
+	}
+}
+
+func TestRawJSONPreservation(t *testing.T) {
+	pw, _ := loadSampleWorkflow(t)
+
+	// Every parsed node should have a non-nil RawJSON
+	for _, n := range pw.Nodes {
+		if n.RawJSON == nil {
+			t.Errorf("node %s: RawJSON is nil", n.Name)
+		}
+	}
+
+	// RawJSON should contain native fields
+	httpNode := pw.Indexes.ByRef["n1"]
+	raw := httpNode.RawJSON
+	if raw["name"] != "HTTP Request" {
+		t.Errorf("expected RawJSON[name]=HTTP Request, got %v", raw["name"])
+	}
+	if raw["type"] != "n8n-nodes-base.httpRequest" {
+		t.Errorf("expected RawJSON[type]=n8n-nodes-base.httpRequest, got %v", raw["type"])
+	}
+
+	// RawJSON should be a deep copy — mutating it shouldn't affect the ParsedNode
+	params, ok := raw["parameters"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected RawJSON[parameters] to be a map")
+	}
+	params["url"] = "MUTATED"
+	if httpNode.Parameters["url"] == "MUTATED" {
+		t.Error("RawJSON is not a deep copy — mutation leaked to ParsedNode.Parameters")
+	}
+}
+
+func TestNodeToNativeJSON(t *testing.T) {
+	pw, _ := loadSampleWorkflow(t)
+
+	setNode := pw.Indexes.ByRef["n2"]
+	native := NodeToNativeJSON(setNode)
+
+	if native["name"] != "Set Data" {
+		t.Errorf("expected name=Set Data, got %v", native["name"])
+	}
+	if native["type"] != "n8n-nodes-base.set" {
+		t.Errorf("expected type=n8n-nodes-base.set, got %v", native["type"])
+	}
+
+	// Should include credentials
+	creds, ok := native["credentials"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected credentials map in native JSON")
+	}
+	if _, ok := creds["httpBasicAuth"]; !ok {
+		t.Error("expected httpBasicAuth in credentials")
+	}
+
+	// Should include parameters
+	params, ok := native["parameters"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected parameters map in native JSON")
+	}
+	if _, ok := params["values"]; !ok {
+		t.Error("expected values in parameters")
+	}
+
+	// Should include position as array
+	pos, ok := native["position"].([]interface{})
+	if !ok || len(pos) != 2 {
+		t.Error("expected position as 2-element array")
+	}
+}
+
+func TestExtractPath(t *testing.T) {
+	pw, _ := loadSampleWorkflow(t)
+	httpNode := pw.Indexes.ByRef["n1"]
+
+	tests := []struct {
+		path    string
+		wantStr string
+		wantErr bool
+	}{
+		{"name", "HTTP Request", false},
+		{"type", "n8n-nodes-base.httpRequest", false},
+		{"parameters.url", "https://example.com", false},
+		{"parameters.method", "GET", false},
+		{"parameters.nonexistent", "", true},
+		{"nonexistent.deep.path", "", true},
+	}
+
+	for _, tt := range tests {
+		val, err := ExtractPath(httpNode, tt.path)
+		if tt.wantErr {
+			if err == nil {
+				t.Errorf("ExtractPath(%q): expected error", tt.path)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("ExtractPath(%q): unexpected error: %v", tt.path, err)
+			continue
+		}
+		s, ok := val.(string)
+		if !ok {
+			t.Errorf("ExtractPath(%q): expected string, got %T", tt.path, val)
+			continue
+		}
+		if s != tt.wantStr {
+			t.Errorf("ExtractPath(%q): expected %q, got %q", tt.path, tt.wantStr, s)
+		}
+	}
+
+	// Test nested path on credentials node
+	setNode := pw.Indexes.ByRef["n2"]
+	val, err := ExtractPath(setNode, "credentials.httpBasicAuth.id")
+	if err != nil {
+		t.Fatalf("ExtractPath credentials: %v", err)
+	}
+	if val != "cred-1" {
+		t.Errorf("expected cred-1, got %v", val)
+	}
+}
+
+func TestDetectChanges(t *testing.T) {
+	before := map[string]interface{}{
+		"name":       "Old Name",
+		"type":       "n8n-nodes-base.httpRequest",
+		"parameters": map[string]interface{}{"url": "https://old.com", "method": "GET"},
+	}
+	after := map[string]interface{}{
+		"name":       "Old Name",
+		"type":       "n8n-nodes-base.httpRequest",
+		"parameters": map[string]interface{}{"url": "https://new.com", "method": "GET"},
+	}
+
+	changes := DetectChanges(before, after)
+	if len(changes) != 1 {
+		t.Fatalf("expected 1 change, got %d: %v", len(changes), changes)
+	}
+	if changes[0] != "parameters.url" {
+		t.Errorf("expected changed path=parameters.url, got %s", changes[0])
+	}
+
+	// Test field addition
+	after["newField"] = "value"
+	changes = DetectChanges(before, after)
+	found := false
+	for _, c := range changes {
+		if c == "newField (added)" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected 'newField (added)' in changes, got %v", changes)
+	}
+
+	// Test field removal
+	delete(after, "newField")
+	before["extra"] = "gone"
+	changes = DetectChanges(before, after)
+	found = false
+	for _, c := range changes {
+		if c == "extra (removed)" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected 'extra (removed)' in changes, got %v", changes)
+	}
+}
+
+func TestSnapshotNodeIsolation(t *testing.T) {
+	pw, _ := loadSampleWorkflow(t)
+	httpNode := pw.Indexes.ByRef["n1"]
+
+	snapshot := SnapshotNode(httpNode)
+
+	// Mutating the snapshot should NOT affect the original node
+	params, ok := snapshot["parameters"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected params map in snapshot")
+	}
+	params["url"] = "MUTATED"
+
+	if httpNode.Parameters["url"] == "MUTATED" {
+		t.Error("SnapshotNode is not isolated — mutation leaked to original node")
+	}
+}
+
+func TestSyncRawJSON(t *testing.T) {
+	pw, _ := loadSampleWorkflow(t)
+	httpNode := pw.Indexes.ByRef["n1"]
+
+	// Mutate the node
+	httpNode.Parameters["url"] = "https://updated.example.com"
+
+	// RawJSON still has original value
+	rawParams, _ := httpNode.RawJSON["parameters"].(map[string]interface{})
+	if rawParams["url"] == "https://updated.example.com" {
+		t.Error("RawJSON should not auto-update when Parameters mutated")
+	}
+
+	// Sync should update RawJSON
+	SyncRawJSON(httpNode)
+	synced := httpNode.RawJSON
+	syncedParams, ok := synced["parameters"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected parameters in synced RawJSON")
+	}
+	if syncedParams["url"] != "https://updated.example.com" {
+		t.Errorf("expected synced url=https://updated.example.com, got %v", syncedParams["url"])
+	}
+}
+
+func TestDeepCopyRaw(t *testing.T) {
+	original := map[string]interface{}{
+		"key": "value",
+		"nested": map[string]interface{}{
+			"inner": "data",
+		},
+	}
+
+	copied, err := DeepCopyRaw(original)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Mutate the copy
+	copied["key"] = "changed"
+	nested, _ := copied["nested"].(map[string]interface{})
+	nested["inner"] = "changed"
+
+	// Original should be unaffected
+	if original["key"] != "value" {
+		t.Error("DeepCopyRaw: mutation leaked to original (top-level)")
+	}
+	origNested, _ := original["nested"].(map[string]interface{})
+	if origNested["inner"] != "data" {
+		t.Error("DeepCopyRaw: mutation leaked to original (nested)")
+	}
+}
+
+func TestParseNodeView(t *testing.T) {
+	tests := []struct {
+		input string
+		want  NodeView
+	}{
+		{"summary", ViewSummary},
+		{"details", ViewDetails},
+		{"json", ViewJSON},
+		{"params", ViewParams},
+		{"connections", ViewConnections},
+		{"SUMMARY", ViewSummary},
+		{"JSON", ViewJSON},
+		{"unknown", ViewSummary},
+		{"", ViewSummary},
+	}
+
+	for _, tt := range tests {
+		got := ParseNodeView(tt.input)
+		if got != tt.want {
+			t.Errorf("ParseNodeView(%q): expected %q, got %q", tt.input, tt.want, got)
+		}
 	}
 }
 

@@ -1,5 +1,7 @@
 package parser
 
+import "strings"
+
 type ParsedWorkflow struct {
 	Meta        WorkflowMeta
 	Nodes       []*ParsedNode
@@ -37,6 +39,7 @@ type ParsedNode struct {
 	Notes       string
 	Inbound     []*ParsedEdge
 	Outbound    []*ParsedEdge
+	RawJSON     map[string]interface{} // exact native node JSON from workflow
 }
 
 type ParsedEdge struct {
@@ -92,6 +95,36 @@ type NodePatch struct {
 }
 
 type DeleteOptions struct {
-	Cascade       bool
+	Cascade        bool
 	RewireStrategy string // "none", "skip", "bridge"
+}
+
+type UpdateResult struct {
+	Node         *ParsedNode
+	ChangedPaths []string
+}
+
+type NodeView string
+
+const (
+	ViewSummary     NodeView = "summary"
+	ViewDetails     NodeView = "details"
+	ViewJSON        NodeView = "json"
+	ViewParams      NodeView = "params"
+	ViewConnections NodeView = "connections"
+)
+
+func ParseNodeView(s string) NodeView {
+	switch strings.ToLower(s) {
+	case "details":
+		return ViewDetails
+	case "json":
+		return ViewJSON
+	case "params":
+		return ViewParams
+	case "connections":
+		return ViewConnections
+	default:
+		return ViewSummary
+	}
 }
