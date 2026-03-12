@@ -1,0 +1,62 @@
+# App Structure - n8n-cli
+# Last updated: 2026-03-12
+
+## Overview
+AI-agent-friendly CLI for n8n workflow automation. Exposes node-level
+operations via a parser layer on top of the n8n REST API.
+
+## Repository
+- Local path: /Users/paolo/Repos/n8n-cli
+
+## Tech Stack
+- Language: Go 1.22
+- CLI framework: spf13/cobra + pflag
+- Config: spf13/viper
+- HTTP client: go-resty/resty/v2
+- JSON querying: tidwall/gjson + tidwall/sjson
+- Logging: go.uber.org/zap
+
+## Project Structure
+n8n-cli/
+  main.go                        # Entry point
+  cmd/
+    root.go                      # Root command, global flags, config init
+    workflow.go                  # workflow create/list/get/update/delete/activate/deactivate/inspect
+    execution.go                 # execution list/get/delete/retry/stop
+    node.go                      # node list/get/create/update/delete/rename/move/enable/disable
+    connection.go                # connection list/create/delete
+    graph.go                     # graph inspect
+    testcmd.go                   # test retry/runs/inspect/webhook
+  internal/
+    config/config.go             # Viper-based configuration (env, file, flags)
+    client/client.go             # n8n REST API client (Resty)
+    parser/
+      types.go                   # ParsedWorkflow, ParsedNode, ParsedEdge, GraphAnalysis
+      parser.go                  # Parse, Rehydrate, ResolveRef, indexes
+      mutate.go                  # AddNode, UpdateNode, RemoveNode, AddEdge, RemoveEdge
+      graph.go                   # AnalyzeGraph (roots, leaves, topo sort, cycles)
+      parser_test.go             # 18 unit tests for parser layer
+    service/service.go           # Orchestration layer (client + parser)
+    output/format.go             # Output formatting (summary/resolved/raw)
+
+## Environment Variables Required
+- N8N_BASE_URL (default: http://localhost:5678)
+- N8N_API_KEY (required)
+
+## Configuration
+Config file: ~/.n8n-cli.yaml or .n8n-cli.yaml in working directory
+
+## Command Families (v1)
+1. workflow  - Full CRUD + activate/deactivate/inspect
+2. execution - List/get/delete/retry/stop
+3. node      - Parser-backed node-level CRUD (the differentiator)
+4. connection - Parser-backed edge management
+5. graph     - Graph analysis (roots, leaves, cycles, topo sort)
+6. test      - Webhook testing, execution retry/inspect
+
+## Notes
+- Node/connection/graph commands use a fetch-parse-mutate-rehydrate-save cycle
+- Parser assigns stable refs (n0, n1, ...) to nodes by array position
+- Node references: bare name, ref:n0, id:uuid, name:"Node Name"
+- Output modes: summary (compact), resolved (detailed), raw (JSON)
+- All mutating node commands support --dry-run
