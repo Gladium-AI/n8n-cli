@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/go-resty/resty/v2"
@@ -192,12 +194,44 @@ func sanitizeWorkflowBody(body map[string]interface{}) map[string]interface{} {
 	return clean
 }
 
+func debugPutDir() string {
+	return strings.TrimSpace(os.Getenv("N8N_CLI_DEBUG_PUT_DIR"))
+}
+
+func writeDebugJSON(dir, name string, v interface{}) {
+	if dir == "" {
+		return
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return
+	}
+	b, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return
+	}
+	_ = os.WriteFile(filepath.Join(dir, name), b, 0o644)
+}
+
+func writeDebugText(dir, name, body string) {
+	if dir == "" {
+		return
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return
+	}
+	_ = os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644)
+}
+
 func (c *Client) UpdateWorkflow(id string, body map[string]interface{}) (map[string]interface{}, error) {
 	clean := sanitizeWorkflowBody(body)
+	dbgDir := debugPutDir()
+	writeDebugJSON(dbgDir, fmt.Sprintf("workflow-%s.put.request.json", id), clean)
 	resp, err := c.http.R().SetBody(clean).Put("/workflows/" + id)
 	if err != nil {
+		writeDebugText(dbgDir, fmt.Sprintf("workflow-%s.put.transport-error.txt", id), err.Error())
 		return nil, fmt.Errorf("update workflow: %w", err)
 	}
+	writeDebugText(dbgDir, fmt.Sprintf("workflow-%s.put.response.txt", id), string(resp.Body()))
 	if err := checkResponse(resp); err != nil {
 		return nil, err
 	}
