@@ -115,8 +115,38 @@ func (c *Client) CreateWorkflow(body map[string]interface{}) (map[string]interfa
 	return result, nil
 }
 
+// workflowWritableFields are the only top-level properties the n8n
+// PUT /workflows/{id} endpoint accepts.  Everything else (createdAt,
+// updatedAt, id, triggerCount, sharedWithProjects, homeProject,
+// usedCredentials, meta, …) is read-only and causes a 400:
+//   "request/body must NOT have additional properties"
+var workflowWritableFields = map[string]bool{
+	"name":        true,
+	"nodes":       true,
+	"connections":  true,
+	"settings":    true,
+	"staticData":  true,
+	"active":      true,
+	"tags":        true,
+	"versionId":   true,
+	"pinData":     true,
+}
+
+// sanitizeWorkflowBody returns a new map containing only the properties
+// that the n8n API will accept in a PUT request.
+func sanitizeWorkflowBody(body map[string]interface{}) map[string]interface{} {
+	clean := make(map[string]interface{}, len(workflowWritableFields))
+	for k, v := range body {
+		if workflowWritableFields[k] {
+			clean[k] = v
+		}
+	}
+	return clean
+}
+
 func (c *Client) UpdateWorkflow(id string, body map[string]interface{}) (map[string]interface{}, error) {
-	resp, err := c.http.R().SetBody(body).Put("/workflows/" + id)
+	clean := sanitizeWorkflowBody(body)
+	resp, err := c.http.R().SetBody(clean).Put("/workflows/" + id)
 	if err != nil {
 		return nil, fmt.Errorf("update workflow: %w", err)
 	}
