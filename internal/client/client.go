@@ -129,12 +129,63 @@ var workflowWritableFields = map[string]bool{
 	"versionId":   true,
 }
 
+// sanitizeSettingsForUpdate removes known GET/editor-only settings that some
+// n8n versions reject on workflow PUT.
+func sanitizeSettingsForUpdate(v interface{}) interface{} {
+	settings, ok := v.(map[string]interface{})
+	if !ok || settings == nil {
+		return v
+	}
+	clean := make(map[string]interface{}, len(settings))
+	for k, val := range settings {
+		switch k {
+		case "availableInMCP", "callerPolicy":
+			continue
+		default:
+			clean[k] = val
+		}
+	}
+	return clean
+}
+
+// sanitizeNodeForUpdate keeps only the common writable node properties.
+func sanitizeNodeForUpdate(v interface{}) interface{} {
+	node, ok := v.(map[string]interface{})
+	if !ok || node == nil {
+		return v
+	}
+	clean := make(map[string]interface{}, len(node))
+	for k, val := range node {
+		switch k {
+		case "id", "name", "type", "typeVersion", "position", "parameters", "credentials", "disabled", "notes":
+			clean[k] = val
+		}
+	}
+	return clean
+}
+
 // sanitizeWorkflowBody returns a new map containing only the properties
 // that the n8n API will accept in a PUT request.
 func sanitizeWorkflowBody(body map[string]interface{}) map[string]interface{} {
 	clean := make(map[string]interface{}, len(workflowWritableFields))
 	for k, v := range body {
-		if workflowWritableFields[k] {
+		if !workflowWritableFields[k] {
+			continue
+		}
+		switch k {
+		case "settings":
+			clean[k] = sanitizeSettingsForUpdate(v)
+		case "nodes":
+			if arr, ok := v.([]interface{}); ok {
+				out := make([]interface{}, 0, len(arr))
+				for _, n := range arr {
+					out = append(out, sanitizeNodeForUpdate(n))
+				}
+				clean[k] = out
+			} else {
+				clean[k] = v
+			}
+		default:
 			clean[k] = v
 		}
 	}
