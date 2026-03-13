@@ -115,21 +115,18 @@ func (c *Client) CreateWorkflow(body map[string]interface{}) (map[string]interfa
 	return result, nil
 }
 
-// workflowWritableFields are the only top-level properties the n8n
-// PUT /workflows/{id} endpoint accepts.  Everything else (createdAt,
-// updatedAt, id, triggerCount, sharedWithProjects, homeProject,
-// usedCredentials, meta, …) is read-only and causes a 400:
-//   "request/body must NOT have additional properties"
+// workflowWritableFields are the only top-level properties we send to
+// PUT /workflows/{id}. Keep this intentionally minimal and aligned with
+// the documented workflow object to avoid version-specific 400 errors
+// caused by extra fields appearing in GET responses.
 var workflowWritableFields = map[string]bool{
 	"name":        true,
 	"nodes":       true,
-	"connections":  true,
+	"connections": true,
 	"settings":    true,
 	"staticData":  true,
-	"active":      true,
-	"tags":        true,
-	"versionId":   true,
 	"pinData":     true,
+	"versionId":   true,
 }
 
 // sanitizeWorkflowBody returns a new map containing only the properties

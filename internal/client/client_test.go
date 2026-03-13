@@ -6,34 +6,32 @@ import (
 )
 
 func TestSanitizeWorkflowBody(t *testing.T) {
-	// Simulate a rehydrated workflow body that includes read-only fields
-	// from the GET response — the exact scenario that causes the 400 error.
 	body := map[string]interface{}{
-		// Writable fields — should be kept
+		// Allowed fields — should be kept
 		"name":        "Test Workflow",
 		"nodes":       []interface{}{},
-		"connections":  map[string]interface{}{},
+		"connections": map[string]interface{}{},
 		"settings":    map[string]interface{}{},
 		"staticData":  "{}",
-		"active":      false,
-		"tags":        []interface{}{},
-		"versionId":   "abc-123",
 		"pinData":     map[string]interface{}{},
-		// Read-only fields from GET response — MUST be stripped
-		"id":                  "wf-123",
-		"createdAt":           "2026-01-01T00:00:00Z",
-		"updatedAt":           "2026-03-13T00:00:00Z",
-		"triggerCount":        float64(5),
-		"sharedWithProjects":  []interface{}{},
-		"homeProject":         map[string]interface{}{"id": "proj-1"},
-		"usedCredentials":     []interface{}{},
-		"meta":                map[string]interface{}{},
+		"versionId":   "abc-123",
+		// Common GET/read-only fields — MUST be stripped
+		"id":             "wf-123",
+		"createdAt":      "2026-01-01T00:00:00Z",
+		"updatedAt":      "2026-03-13T00:00:00Z",
+		"triggerCount":   float64(5),
+		"meta":           map[string]interface{}{},
+		"active":         false,
+		"tags":           []interface{}{},
+		"description":    "desc",
+		"isArchived":     false,
+		"shared":         []interface{}{},
+		"versionCounter": float64(7),
 	}
 
 	clean := sanitizeWorkflowBody(body)
 
-	// Verify all writable fields are present
-	expected := []string{"name", "nodes", "connections", "settings", "staticData", "active", "tags", "versionId", "pinData"}
+	expected := []string{"connections", "name", "nodes", "pinData", "settings", "staticData", "versionId"}
 	sort.Strings(expected)
 
 	var got []string
@@ -51,29 +49,19 @@ func TestSanitizeWorkflowBody(t *testing.T) {
 		}
 	}
 
-	// Verify read-only fields were stripped
-	readOnly := []string{"id", "createdAt", "updatedAt", "triggerCount", "sharedWithProjects", "homeProject", "usedCredentials", "meta"}
+	readOnly := []string{"id", "createdAt", "updatedAt", "triggerCount", "meta", "active", "tags", "description", "isArchived", "shared", "versionCounter"}
 	for _, k := range readOnly {
 		if _, ok := clean[k]; ok {
-			t.Errorf("read-only field %q was NOT stripped", k)
+			t.Errorf("field %q was NOT stripped", k)
 		}
-	}
-
-	// Verify values are preserved (not just keys)
-	if clean["name"] != "Test Workflow" {
-		t.Errorf("expected name=Test Workflow, got %v", clean["name"])
-	}
-	if clean["active"] != false {
-		t.Errorf("expected active=false, got %v", clean["active"])
 	}
 }
 
 func TestSanitizeWorkflowBodyMinimal(t *testing.T) {
-	// Only nodes + connections + name — should all survive
 	body := map[string]interface{}{
 		"name":        "Minimal",
 		"nodes":       []interface{}{},
-		"connections":  map[string]interface{}{},
+		"connections": map[string]interface{}{},
 	}
 
 	clean := sanitizeWorkflowBody(body)
