@@ -40,7 +40,7 @@ func TestSanitizeWorkflowBody(t *testing.T) {
 
 	clean := sanitizeWorkflowBody(body)
 
-	expected := []string{"connections", "name", "nodes", "pinData", "settings", "staticData", "versionId"}
+	expected := []string{"connections", "name", "nodes", "settings"}
 	sort.Strings(expected)
 	var got []string
 	for k := range clean {
@@ -56,17 +56,6 @@ func TestSanitizeWorkflowBody(t *testing.T) {
 		}
 	}
 
-	settings := clean["settings"].(map[string]interface{})
-	if _, ok := settings["availableInMCP"]; ok {
-		t.Errorf("availableInMCP should be stripped from settings")
-	}
-	if _, ok := settings["callerPolicy"]; ok {
-		t.Errorf("callerPolicy should be stripped from settings")
-	}
-	if settings["executionOrder"] != "v1" {
-		t.Errorf("executionOrder should be preserved")
-	}
-
 	nodes := clean["nodes"].([]interface{})
 	node := nodes[0].(map[string]interface{})
 	if _, ok := node["webhookId"]; ok {
@@ -76,6 +65,17 @@ func TestSanitizeWorkflowBody(t *testing.T) {
 		if _, ok := node[k]; !ok {
 			t.Errorf("expected node field %q to be preserved", k)
 		}
+	}
+
+	settings := clean["settings"].(map[string]interface{})
+	if _, ok := settings["availableInMCP"]; ok {
+		t.Errorf("availableInMCP should be stripped from settings")
+	}
+	if _, ok := settings["callerPolicy"]; ok {
+		t.Errorf("callerPolicy should be stripped from settings")
+	}
+	if v, ok := settings["executionOrder"]; !ok || v != "v1" {
+		t.Errorf("expected settings.executionOrder to be preserved, got %v", settings["executionOrder"])
 	}
 }
 

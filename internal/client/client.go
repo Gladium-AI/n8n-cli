@@ -126,9 +126,6 @@ var workflowWritableFields = map[string]bool{
 	"nodes":       true,
 	"connections": true,
 	"settings":    true,
-	"staticData":  true,
-	"pinData":     true,
-	"versionId":   true,
 }
 
 // sanitizeSettingsForUpdate removes known GET/editor-only settings that some
