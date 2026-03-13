@@ -68,13 +68,14 @@ func parseNode(m map[string]interface{}, index int) *ParsedNode {
 	rawCopy, _ := DeepCopyRaw(m)
 
 	node := &ParsedNode{
-		Ref:      fmt.Sprintf("n%d", index),
-		ID:       stringField(m, "id"),
-		Name:     stringField(m, "name"),
-		Type:     stringField(m, "type"),
-		Disabled: boolField(m, "disabled"),
-		Notes:    stringField(m, "notes"),
-		RawJSON:  rawCopy,
+		Ref:              fmt.Sprintf("n%d", index),
+		ID:               stringField(m, "id"),
+		Name:             stringField(m, "name"),
+		Type:             stringField(m, "type"),
+		Disabled:         boolField(m, "disabled"),
+		AlwaysOutputData: boolField(m, "alwaysOutputData"),
+		Notes:            stringField(m, "notes"),
+		RawJSON:          rawCopy,
 	}
 
 	if tv, ok := m["typeVersion"]; ok {
@@ -229,6 +230,9 @@ func rehydrateNode(n *ParsedNode) map[string]interface{} {
 	if n.Disabled {
 		m["disabled"] = true
 	}
+	if n.AlwaysOutputData {
+		m["alwaysOutputData"] = true
+	}
 	if len(n.Credentials) > 0 {
 		m["credentials"] = n.Credentials
 	}
@@ -380,26 +384,19 @@ func DeepCopyRaw(raw map[string]interface{}) (map[string]interface{}, error) {
 	return copy, nil
 }
 
-// NodeToNativeJSON converts a ParsedNode back to the native n8n node JSON format.
-// This is the authoritative representation used for --view json and copy-paste safety.
 func NodeToNativeJSON(n *ParsedNode) map[string]interface{} {
 	return rehydrateNode(n)
 }
 
-// SnapshotNode takes a deep copy of a node's current state for diff comparison.
-// The returned map is fully isolated from the original node — safe to mutate.
 func SnapshotNode(n *ParsedNode) map[string]interface{} {
 	shallow := rehydrateNode(n)
 	deep, err := DeepCopyRaw(shallow)
 	if err != nil {
-		// Fallback: return the shallow copy if deep copy fails (should never happen)
 		return shallow
 	}
 	return deep
 }
 
-// ExtractPath extracts a value from the native node JSON using a dot-separated path.
-// Paths are relative to the node root: "parameters.email", "credentials.hubspotApi.id", "name".
 func ExtractPath(n *ParsedNode, path string) (interface{}, error) {
 	native := NodeToNativeJSON(n)
 	return extractFromMap(native, path)
@@ -426,7 +423,6 @@ func extractFromMap(m map[string]interface{}, path string) (interface{}, error) 
 	return current, nil
 }
 
-// DetectChanges compares before and after node snapshots and returns dot-paths that differ.
 func DetectChanges(before, after map[string]interface{}) []string {
 	var changes []string
 	diffMaps("", before, after, &changes)
@@ -476,12 +472,9 @@ func diffMaps(prefix string, before, after map[string]interface{}, changes *[]st
 	}
 }
 
-// SyncRawJSON updates the stored RawJSON on a ParsedNode to reflect current field values.
 func SyncRawJSON(n *ParsedNode) {
 	n.RawJSON = rehydrateNode(n)
 }
-
-// --- helpers ---
 
 func stringField(m map[string]interface{}, key string) string {
 	v, ok := m[key]

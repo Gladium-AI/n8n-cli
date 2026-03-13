@@ -27,19 +27,20 @@ type TagInfo struct {
 }
 
 type ParsedNode struct {
-	Ref         string
-	ID          string
-	Name        string
-	Type        string
-	TypeVersion int
-	Position    [2]float64
-	Disabled    bool
-	Parameters  map[string]interface{}
-	Credentials map[string]interface{}
-	Notes       string
-	Inbound     []*ParsedEdge
-	Outbound    []*ParsedEdge
-	RawJSON     map[string]interface{} // exact native node JSON from workflow
+	Ref              string
+	ID               string
+	Name             string
+	Type             string
+	TypeVersion      int
+	Position         [2]float64
+	Disabled         bool
+	AlwaysOutputData bool
+	Parameters       map[string]interface{}
+	Credentials      map[string]interface{}
+	Notes            string
+	Inbound          []*ParsedEdge
+	Outbound         []*ParsedEdge
+	RawJSON          map[string]interface{} // exact native node JSON from workflow
 }
 
 type ParsedEdge struct {
@@ -58,28 +59,29 @@ type WorkflowIndexes struct {
 }
 
 type GraphAnalysis struct {
-	Roots           []string
-	Leaves          []string
+	Roots            []string
+	Leaves           []string
 	TopologicalOrder []string
-	Orphans         []string
-	HasCycles       bool
-	CycleNodes      []string
-	BranchingPoints []string
-	NodeCount       int
-	EdgeCount       int
-	AdjacencyList   map[string][]string
+	Orphans          []string
+	HasCycles        bool
+	CycleNodes       []string
+	BranchingPoints  []string
+	NodeCount        int
+	EdgeCount        int
+	AdjacencyList    map[string][]string
 }
 
 type NodeInput struct {
-	Name        string
-	Type        string
-	TypeVersion int
-	Position    [2]float64
-	Disabled    bool
-	Parameters  map[string]interface{}
-	Credentials map[string]interface{}
-	Notes       string
-	RawJSON     map[string]interface{}
+	Name             string
+	Type             string
+	TypeVersion      int
+	Position         [2]float64
+	Disabled         bool
+	AlwaysOutputData bool
+	Parameters       map[string]interface{}
+	Credentials      map[string]interface{}
+	Notes            string
+	RawJSON          map[string]interface{}
 }
 
 type EdgeInput struct {
