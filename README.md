@@ -1,5 +1,8 @@
 # n8n-cli
 
+[![Go](https://img.shields.io/badge/Go-1.22+-00ADD8?logo=go&logoColor=white)](https://go.dev)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 AI-agent-friendly CLI for [n8n](https://n8n.io) workflow automation. Exposes **node-level operations** via a parser layer on top of the n8n REST API — so you can list, inspect, create, and modify individual nodes without reading or rewriting entire workflow JSON.
 
 ## Why n8n-cli?
