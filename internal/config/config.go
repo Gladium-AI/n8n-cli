@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/joho/godotenv"
 	"github.com/spf13/viper"
 )
 
@@ -23,6 +24,8 @@ const (
 )
 
 func Init() {
+	_ = godotenv.Load()
+
 	viper.SetDefault(KeyBaseURL, DefaultBaseURL)
 	viper.SetDefault(KeyOutput, DefaultOutput)
 	viper.SetDefault(KeyJSON, false)
