@@ -1,0 +1,6 @@
+{
+  "permissions": {
+    "deny": ["Read(./.env*)", "Read(./.env.local)"],
+    "allow": ["Execute (n8n-cli*)"]
+  }
+}
