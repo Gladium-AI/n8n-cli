@@ -401,6 +401,12 @@ func applyPatch(node *ParsedNode, patch NodePatch) error {
 				return fmt.Errorf("credentials must be a JSON object")
 			}
 		}
+	case "onError":
+		s, ok := patch.Value.(string)
+		if !ok {
+			return fmt.Errorf("onError must be a string")
+		}
+		node.OnError = s
 	default:
 		return fmt.Errorf("unknown patch path: %q", parts[0])
 	}

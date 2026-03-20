@@ -156,7 +156,7 @@ func sanitizeNodeForUpdate(v interface{}) interface{} {
 	clean := make(map[string]interface{}, len(node))
 	for k, val := range node {
 		switch k {
-		case "id", "name", "type", "typeVersion", "position", "parameters", "credentials", "disabled", "notes":
+		case "id", "name", "type", "typeVersion", "position", "parameters", "credentials", "disabled", "notes", "onError":
 			clean[k] = val
 		}
 	}
