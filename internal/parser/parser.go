@@ -75,6 +75,7 @@ func parseNode(m map[string]interface{}, index int) *ParsedNode {
 		Disabled:         boolField(m, "disabled"),
 		AlwaysOutputData: boolField(m, "alwaysOutputData"),
 		Notes:            stringField(m, "notes"),
+		OnError:          stringField(m, "onError"),
 		RawJSON:          rawCopy,
 	}
 
@@ -238,6 +239,9 @@ func rehydrateNode(n *ParsedNode) map[string]interface{} {
 	}
 	if n.Notes != "" {
 		m["notes"] = n.Notes
+	}
+	if n.OnError != "" {
+		m["onError"] = n.OnError
 	}
 	return m
 }

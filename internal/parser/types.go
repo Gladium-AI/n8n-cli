@@ -38,6 +38,7 @@ type ParsedNode struct {
 	Parameters       map[string]interface{}
 	Credentials      map[string]interface{}
 	Notes            string
+	OnError          string // "stopWorkflow", "continueRegularOutput", "continueErrorOutput"
 	Inbound          []*ParsedEdge
 	Outbound         []*ParsedEdge
 	RawJSON          map[string]interface{} // exact native node JSON from workflow
