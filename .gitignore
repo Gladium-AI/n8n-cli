@@ -1,4 +1,4 @@
-n8n-cli
+/n8n-cli
 *.exe
 *.exe~
 *.dll
