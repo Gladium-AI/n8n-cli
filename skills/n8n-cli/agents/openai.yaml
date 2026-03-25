@@ -1,0 +1,4 @@
+interface:
+  display_name: "n8n CLI"
+  short_description: "Operate n8n workflows and nodes with n8n-cli"
+  default_prompt: "Use n8n-cli to inspect, mutate, test, or debug n8n workflows and return the exact commands, workflow IDs, node refs, and outputs."

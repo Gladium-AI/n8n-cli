@@ -30,6 +30,14 @@ Move the binary to your PATH:
 mv n8n-cli /usr/local/bin/
 ```
 
+Install the Claude/Codex skill:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Gladium-AI/n8n-cli/main/install-skill.sh | sh
+```
+
+The installer auto-detects Claude or Codex and installs `skills/n8n-cli` into that agent's skills directory. To override the target, pipe into `AGENT=codex sh` or `SKILLS_DIR=/path/to/skills sh`.
+
 ## Configuration
 
 Set your n8n instance credentials via environment variables, config file, or CLI flags.
