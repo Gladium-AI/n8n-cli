@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-REPO="${REPO:-Gladium-AI/n8n-cli}"
+REPO="${REPO:-paoloanzn/n8n-cli}"
 REF="${REF:-main}"
 SKILL_NAME="${SKILL_NAME:-n8n-cli}"
 SKILL_PATH="${SKILL_PATH:-skills/${SKILL_NAME}}"
